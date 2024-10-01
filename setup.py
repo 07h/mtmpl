@@ -11,6 +11,7 @@ README = (HERE / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="mtmpl",  # Replace with your desired package name
+    py_modules=["mtmpl"],
     version="0.1.0",  # Start with a small version and increase it with each release
     author="Your Name",  # Replace with your name
     author_email="your.email@example.com",  # Replace with your email
