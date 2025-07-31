@@ -1,6 +1,6 @@
 # mtmpl/mtmpl.py
 
-import re
+import regex as re
 from typing import Any, Dict, List, Tuple
 
 
@@ -30,28 +30,28 @@ class Mtmpl:
     VARIABLE_PATTERN = re.compile(r"{{\s*(.*?)\s*}}")
     TAG_PATTERN = re.compile(r"{%\s*(\w+)(.*?)\s*%}")
 
-    def render(self, template: str, context: Dict[str, Any]) -> str:
+    async def render(self, template: str, context: Dict[str, Any]) -> str:
         """
         Renders the template using the provided context.
         """
-        tokens = self._tokenize(template)
+        tokens = await self._tokenize(template)
         # Convert context to AttrDict for attribute-style access
-        context_copy = self._convert_to_attrdict(context)
-        rendered = self._render_tokens(tokens, context_copy)
+        context_copy = await self._convert_to_attrdict(context)
+        rendered = await self._render_tokens(tokens, context_copy)
         return rendered
 
-    def _convert_to_attrdict(self, obj: Any) -> Any:
+    async def _convert_to_attrdict(self, obj: Any) -> Any:
         """
         Recursively converts dictionaries in the context to AttrDict instances.
         """
         if isinstance(obj, dict):
-            return AttrDict({k: self._convert_to_attrdict(v) for k, v in obj.items()})
+            return AttrDict({k: await self._convert_to_attrdict(v) for k, v in obj.items()})
         elif isinstance(obj, list):
-            return [self._convert_to_attrdict(item) for item in obj]
+            return [await self._convert_to_attrdict(item) for item in obj]
         else:
             return obj
 
-    def _tokenize(self, template: str) -> List[Tuple]:
+    async def _tokenize(self, template: str) -> List[Tuple]:
         """
         Splits the template into tokens: text, variables, and tags.
         """
@@ -84,7 +84,7 @@ class Mtmpl:
                 break
         return tokens
 
-    def _render_tokens(self, tokens: List[Tuple], context: Dict[str, Any]) -> str:
+    async def _render_tokens(self, tokens: List[Tuple], context: Dict[str, Any]) -> str:
         """
         Processes the list of tokens and returns the rendered text.
         """
@@ -95,42 +95,42 @@ class Mtmpl:
             if token[0] == "TEXT":
                 output.append(token[1])
             elif token[0] == "VAR":
-                value = self._evaluate_expression(token[1], context)
+                value = await self._evaluate_expression(token[1], context)
                 output.append(str(value))
             elif token[0] == "TAG":
                 tag_name = token[1]
                 tag_args = token[2]
                 if tag_name == "if":
                     # Handle if condition
-                    condition = self._evaluate_expression(tag_args, context)
+                    condition = await self._evaluate_expression(tag_args, context)
                     # Find the block for if, considering nested ifs and fors
-                    end_if, blocks = self._find_block(tokens, i + 1, "if")
+                    end_if, blocks = await self._find_block(tokens, i + 1, "if")
                     if condition:
                         # Render the if block
-                        output.append(self._render_tokens(blocks["if"], context))
+                        output.append(await self._render_tokens(blocks["if"], context))
                     else:
                         handled = False
                         for elif_cond, elif_block in blocks.get("elif", []):
-                            if self._evaluate_expression(elif_cond, context):
-                                output.append(self._render_tokens(elif_block, context))
+                            if await self._evaluate_expression(elif_cond, context):
+                                output.append(await self._render_tokens(elif_block, context))
                                 handled = True
                                 break
                         if not handled and "else" in blocks:
-                            output.append(self._render_tokens(blocks["else"], context))
+                            output.append(await self._render_tokens(blocks["else"], context))
                     i = end_if
                 elif tag_name == "for":
                     # Handle for loop
-                    var, iterable = self._parse_for_args(tag_args)
-                    iterable_value = self._evaluate_expression(iterable, context)
+                    var, iterable = await self._parse_for_args(tag_args)
+                    iterable_value = await self._evaluate_expression(iterable, context)
                     if not isinstance(iterable_value, list):
                         iterable_value = list(iterable_value)
                     # Find the endfor, considering nested fors and ifs
-                    end_for, loop_body = self._find_block(tokens, i + 1, "for")
+                    end_for, loop_body = await self._find_block(tokens, i + 1, "for")
                     for item in iterable_value:
                         # Update context with the loop variable
                         context[var] = item
                         # Render loop body
-                        output.append(self._render_tokens(loop_body, context))
+                        output.append(await self._render_tokens(loop_body, context))
                     # Safely remove loop variable from context
                     context.pop(var, None)
                     i = end_for
@@ -140,7 +140,7 @@ class Mtmpl:
 
         return "".join(output)
 
-    def _find_block(
+    async def _find_block(
         self, tokens: List[Tuple], start: int, block_type: str
     ) -> Tuple[int, Dict[str, Any]]:
         """
@@ -219,8 +219,11 @@ class Mtmpl:
             return end, blocks
         elif block_type == "for":
             return end, blocks["for"]
+        else:
+            # Default case - return the end position and empty blocks
+            return end, blocks
 
-    def _parse_for_args(self, args: str) -> Tuple[str, str]:
+    async def _parse_for_args(self, args: str) -> Tuple[str, str]:
         """
         Parses the arguments of a for tag.
         Example: "item in items" -> ("item", "items")
@@ -232,11 +235,13 @@ class Mtmpl:
         iterable = parts[1].strip()
         return var, iterable
 
-    def _evaluate_expression(self, expression: str, context: Dict[str, Any]) -> Any:
+    async def _evaluate_expression(self, expression: str, context: Dict[str, Any]) -> Any:
         """
         Evaluates an expression within the given context.
         """
         try:
             return eval(expression, {}, context)
         except Exception as e:
+            if isinstance(e, NameError):
+                return "{{ " + expression + " }}"
             raise ValueError(f"Error evaluating expression '{expression}': {e}")

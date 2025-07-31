@@ -25,7 +25,7 @@ setup(
         "License :: OSI Approved :: MIT License",  # Choose your license
         "Operating System :: OS Independent",
     ],
-    python_requires=">=3.6",  # Specify your Python version requirements
+    python_requires=">=3.11",  # Specify your Python version requirements
     keywords="template engine jinja simple",  # Add relevant keywords
     project_urls={  # Optional
         "Bug Reports": "https://github.com/07h/mtmpl/issues",
